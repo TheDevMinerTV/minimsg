@@ -24,12 +24,27 @@ func Parse(mini string) *c.Text {
 
 	var components []c.Component
 
+	// Check if the string has any < characters before splitting
+	if !strings.Contains(mini, "<") {
+		// If no < character, treat it as plain text
+		return &c.Text{
+			Content: mini,
+			S:       styleStack[0],
+		}
+	}
+
 	for _, s := range strings.Split(mini, "<") {
 		if s == "" {
 			continue
 		}
 
 		split := strings.Split(s, ">")
+
+		// Ensure split has at least two elements before accessing split[1]
+		if len(split) < 2 {
+			fmt.Println("Warning: missing closing '>' in mini string:", s)
+			continue
+		}
 
 		key := split[0]
 		if strings.HasPrefix(key, "/") {
@@ -44,7 +59,9 @@ func Parse(mini string) *c.Text {
 			styleStack = append(styleStack, newStyle)
 
 			newText := modify(key, split[1], &styleStack[len(styleStack)-1])
-			components = append(components, newText)
+			if newText != nil { // Add a check to avoid nil components
+				components = append(components, newText)
+			}
 		}
 	}
 
