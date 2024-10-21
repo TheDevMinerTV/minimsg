@@ -5,7 +5,7 @@
 //
 // Credits to the partial Go port of MiniMessage (https://docs.advntr.dev/minimessage/index.html) by
 // https://github.com/emortalmc/GateProxy/blob/main/minimessage/minimessage.go.
-package mini
+package minimsg
 
 import (
 	"fmt"
