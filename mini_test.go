@@ -1,6 +1,8 @@
 package minimsg
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,12 +10,42 @@ import (
 	c "go.minekube.com/common/minecraft/component"
 )
 
+func TestNew(t *testing.T) {
+	p := newParser(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~' <color:gray>test</color>")
+	res, err := p.parse()
+	if err != nil {
+		t.Error(err)
+	}
+
+	e := json.NewEncoder(os.Stderr)
+	e.SetEscapeHTML(false)
+	e.SetIndent("", "  ")
+	if err := e.Encode(res); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestParse(t *testing.T) {
 	testCases := []struct {
 		output any
 		desc   string
 		input  string
 	}{
+		{
+			desc: "Text - Normal",
+			// ASCII printable chars
+			input: " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~'",
+			output: &c.Text{
+				Extra: []c.Component{
+					&c.Text{
+						Content: " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~'",
+						S: c.Style{
+							Color: color.White,
+						},
+					},
+				},
+			},
+		},
 		{
 			desc:  "Colors - Hex",
 			input: "<#ffffff>Foo</#ffffff> <color:#ffffff>Bar</color:#ffffff> <c:#ffffff>Baz</c:#ffffff>",
@@ -236,7 +268,8 @@ func TestParse(t *testing.T) {
 
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			parsed := Parse(tC.input)
+			parsed, err := Parse(tC.input)
+			assert.NoError(t, err, "failed to parse")
 
 			assert.Equal(t, tC.output, parsed)
 		})

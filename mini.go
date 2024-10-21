@@ -10,64 +10,137 @@ package minimsg
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 
 	"go.minekube.com/common/minecraft/color"
+	"go.minekube.com/common/minecraft/component"
 	c "go.minekube.com/common/minecraft/component"
 )
+
+type parser struct {
+	input []rune
+	pos   int
+}
+
+func newParser(input string) *parser {
+	return &parser{
+		input: []rune(input),
+	}
+}
+
+func (p *parser) parse() (component.Component, error) {
+	root := &component.Text{
+		Content: "",
+		Extra:   make([]c.Component, 0),
+	}
+
+	text := &component.Text{}
+
+	for p.pos < len(p.input) {
+		if p.peek() == '<' {
+			p.consume()
+
+			if tag, leftOver, err := p.parseTag(); err != nil {
+				return nil, err
+			} else if tag != nil {
+				root.Extra = append(root.Extra, text)
+				text = &component.Text{}
+				root.Extra = append(root.Extra, tag)
+			} else {
+				text.Content += leftOver
+			}
+		} else {
+			text.Content += string(p.consume())
+		}
+	}
+
+	root.Extra = append(root.Extra, text)
+
+	return root, nil
+}
+
+func (p *parser) peek() rune {
+	return p.input[p.pos]
+}
+
+func (p *parser) consume() rune {
+	ch := p.input[p.pos]
+	p.pos++
+	return ch
+}
+
+func (p *parser) consumeUntil(stopChar rune) {
+	for p.pos < len(p.input) && p.peek() != stopChar {
+		p.consume()
+	}
+	if p.pos < len(p.input) && p.peek() == stopChar {
+		p.consume()
+	}
+}
+
+func (p *parser) parseTag() (component.Component, string, error) {
+	tagName, tagArgs := p.parseTagName()
+
+	switch tagName {
+	case "color", "colour", "c":
+		el, err := p.parseColor(tagArgs)
+		return el, "", err
+	default:
+		tag := "<" + tagName
+		if tagArgs != "" {
+			tag += ":" + tagArgs
+		}
+		tag += ">"
+
+		return nil, tag, nil
+	}
+}
+
+func (p *parser) parseColor(args string) (component.Component, error) {
+	fmt.Fprintf(os.Stderr, "pos: %d\n", p.pos)
+	for p.pos < len(p.input) {
+		fmt.Fprintf(os.Stderr, "pos: %d, ch: %s\n", p.pos, string(p.consume()))
+	}
+	color, err := ParseColor(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return &component.Text{
+		S: c.Style{
+			Color: color,
+		},
+	}, nil
+}
+
+func (p *parser) parseTagName() (string, string) {
+	var tagName strings.Builder
+	var tagArgs strings.Builder
+
+	inArgs := false
+	for p.pos < len(p.input) && p.peek() != '>' {
+		ch := p.consume()
+		if ch == ':' {
+			inArgs = true
+		} else if inArgs {
+			tagArgs.WriteRune(ch)
+		} else {
+			tagName.WriteRune(ch)
+		}
+	}
+
+	// consume the >
+	p.consume()
+
+	return tagName.String(), tagArgs.String()
+}
 
 // Parse takes a string as input and returns a `c.Text` object. It splits the input string by "<",
 // then further splits each substring by ">". It modifies the style based on the key (the part before ">")
 // and appends a new text component with the modified style and content (the part after ">").
-func Parse(mini string) *c.Text {
-	styleStack := []c.Style{{Color: color.White}}
-
-	var components []c.Component
-
-	// Check if the string has any < characters before splitting
-	if !strings.Contains(mini, "<") {
-		// If no < character, treat it as plain text
-		return &c.Text{
-			Content: mini,
-			S:       styleStack[0],
-		}
-	}
-
-	for _, s := range strings.Split(mini, "<") {
-		if s == "" {
-			continue
-		}
-
-		split := strings.Split(s, ">")
-
-		// Ensure split has at least two elements before accessing split[1]
-		if len(split) < 2 {
-			fmt.Println("Warning: missing closing '>' in mini string:", s)
-			continue
-		}
-
-		key := split[0]
-		if strings.HasPrefix(key, "/") {
-			// Pop last style from the stack
-			styleStack = styleStack[:len(styleStack)-1]
-			key = key[1:]
-		} else {
-			// Get last style to modify
-			newStyle := styleStack[len(styleStack)-1]
-
-			// Push new style onto stack
-			styleStack = append(styleStack, newStyle)
-
-			newText := modify(key, split[1], &styleStack[len(styleStack)-1])
-			if newText != nil { // Add a check to avoid nil components
-				components = append(components, newText)
-			}
-		}
-	}
-
-	return &c.Text{
-		Extra: components,
-	}
+func Parse(mini string) (c.Component, error) {
+	return newParser(mini).parse()
 }
 
 // modify takes a key, content, and style as input and returns a `c.Text` object. It modifies the style
