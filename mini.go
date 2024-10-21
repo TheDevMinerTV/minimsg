@@ -70,8 +70,6 @@ func Parse(mini string) *c.Text {
 	}
 }
 
-
-
 // modify takes a key, content, and style as input and returns a `c.Text` object. It modifies the style
 // based on the key and returns a new text component with the modified style and content.
 func modify(key string, content string, style *c.Style) *c.Text {
